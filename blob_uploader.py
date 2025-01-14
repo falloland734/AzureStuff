@@ -1,7 +1,5 @@
 from azure.core.exceptions import ResourceExistsError
 from azure.storage.blob import BlobServiceClient
-import os
-from dotenv import load_dotenv
 from urllib.parse import urlparse
 from crawler import Crawler
 
