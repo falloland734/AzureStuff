@@ -40,7 +40,7 @@ func StartAzure(ctx context.Context) {
 		&azopenai.ChatRequestSystemMessage{Content: azopenai.NewChatRequestSystemMessageContent(systemPrompt)},
 		&azopenai.ChatRequestUserMessage{Content: azopenai.NewChatRequestUserMessageContent(userMessage)},
 	}
-	configuration := "azureml-default"
+
 	resp, err := client.GetChatCompletions(ctx, azopenai.ChatCompletionsOptions{
 		Messages:         messages,
 		MaxTokens:        to.Ptr[int32](800),
@@ -61,19 +61,15 @@ func StartAzure(ctx context.Context) {
 					InScope:       to.Ptr[bool](true),
 					TopNDocuments: to.Ptr[int32](5),
 					QueryType:     &queryType,
-					EmbeddingDependency: &azopenai.OnYourDataVectorizationSource{
-						Type: azopenai.OnYourDataEndpointVectorizationSource{
-							Authentication: &azopenai.OnYourDataVectorSearchAuthenticationOptions{
-								Type: azopenai.OnYourDataVectorSearchAPIKeyAuthenticationOptions{
-									Key:  &azureOpenAIKey,
-									Type: &authType,
-								}.Type,
-							},
-							Endpoint: &embedingEndpoint,
-							Type:     &endpointType,
-						}.Type,
+					EmbeddingDependency: &azopenai.OnYourDataEndpointVectorizationSource{
+						Authentication: &azopenai.OnYourDataVectorSearchAPIKeyAuthenticationOptions{
+							Type: &authType,
+							Key:  &azureOpenAIKey,
+						},
+						Endpoint: &embedingEndpoint,
+						Type:     &endpointType,
 					},
-					SemanticConfiguration: &configuration,
+					SemanticConfiguration: to.Ptr("azureml-default"),
 				},
 			},
 		},
