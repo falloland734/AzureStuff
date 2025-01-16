@@ -64,6 +64,8 @@ class BlobUploader:
         container_name = parts[0]
         
         return container_name
+    
+    # TODO: make params "ai_check : False" and "to_folder : False"
 
     def create_or_update_blob(self, container_name: str) -> None:
         """
