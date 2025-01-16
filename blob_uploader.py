@@ -76,7 +76,7 @@ class BlobUploader:
         """
         try:
             # Attempt to create a new container. If it doesn't exist, it will be created;
-            # otherwise, a ResourceExistsError is raised.
+            # otherwise, a ResourceExistsError is raised. We clear the container and upload new blobs
             self.blob_service_client.create_container(name=container_name)
             print(f"Container '{container_name}' created.")
         except ResourceExistsError:
