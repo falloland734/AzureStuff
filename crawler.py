@@ -1,101 +1,64 @@
 import asyncio
+import os
 from crawl4ai import AsyncWebCrawler
 from openai import OpenAI
 
 class CrawledResult:
     """
-    A small wrapper class that holds the crawled data (dict) 
-    and provides methods to post-process it in a fluent (chained) style.
-
-    :param data_dict: A dictionary of `{ short_link: markdown_content }`.
-    :type data_dict: dict
-
-    Example::
-    
-        # Suppose you have some data dict
-        data = {"about_us": "Some content...", "contact_us": "Contact details..."}
-        result = CrawledResult(data)
-        clean_result = result.check_with_ai("YOUR_OPENAI_API_KEY")
-
-        # `clean_result.data_dict` is now filtered / updated in-place.
+    Holds crawled data and provides chainable post-processing.
     """
 
     def __init__(self, data_dict: dict):
         """
-        Initialize the CrawledResult with a data dictionary.
-
-        :param data_dict: A dict containing the crawled data, 
-                          typically { short_link: markdown_content }.
-        :type data_dict: dict
+        :param data_dict: { short_link: markdown_content }
         """
         self.data_dict = data_dict
 
-    def check_with_ai(self, model : str, api_key: str) -> "CrawledResult":
+    def check_with_ai(self, model: str, api_key: str) -> "CrawledResult":
         """
-        Calls the AI-based check on the `data_dict` to remove “useless” entries.
-        This method mutates the internal `data_dict` and returns `self`, 
-        enabling a fluent (chainable) usage pattern.
-
-        :param model: Your OpenAI model that you want to use to analyze and generate a response. (gpt-3.5, etc)
-        :type model: str
-        :param api_key: Your OpenAI API key to authenticate requests.
-        :type api_key: str
-        :return: Returns the same CrawledResult instance, so you can chain calls.
-        :rtype: CrawledResult
-
-        Example usage (in a chained style)::
-
-            result = Crawler.crawl_links("https://example.com").check_with_ai("YOUR_OPENAI_API_KEY")
-            # Now `result.data_dict` is filtered to remove "useless" entries.
+        Filters out “useless” entries in-place via OpenAI.
+        
+        :param model: e.g. "gpt-3.5"
+        :param api_key: OpenAI API key
+        :return: self
         """
-        # Delegate the actual logic to Crawler.check_with_ai(...)
         self.data_dict = Crawler.check_with_ai(self.data_dict, model, api_key)
+        return self
+
+    def to_folder(self, folder_path: str) -> "CrawledResult":
+        """
+        Writes each entry in data_dict to a .txt file in folder_path.
+        
+        :param folder_path: Destination folder
+        :return: self
+        """
+        if not os.path.exists(folder_path):
+            os.mkdir(folder_path)
+        for key, value in self.data_dict.items():
+            with open(os.path.join(folder_path, f"{key}.txt"), "w", encoding="utf-8") as f:
+                f.write(value)
         return self
 
 
 class Crawler:
     """
-    A class that provides crawling methods for a given URL, returning
-    crawled Markdown data and an AI-driven filtering mechanism.
-
-    Public static methods:
-      1) crawl_links(websiteURL) -> CrawledResult
-         - Crawls the given URL for internal links and scrapes their Markdown content.
-      2) check_with_ai(clean_data_dict, api_key) -> dict
-         - Filters out "useless" content from a dictionary by querying OpenAI.
-
-    Internal (async) methods:
-      1) _async_crawl_links(websiteURL) -> dict
-      2) _async_get_links(websiteURL) -> set[str]
-         - Called internally via `asyncio.run()`.
+    Provides crawling and AI-based filtering.
     """
 
     @staticmethod
     def get_links(websiteURL: str) -> set[str]:
         """
-        Synchronously retrieve all internal links from the given website URL.
-
-        This method runs `_async_get_links(...)` under the hood using `asyncio.run()`,
-        so the caller does not need to worry about async/await.
-
-        :param websiteURL: The initial website URL to crawl, e.g. "https://example.com".
-        :type websiteURL: str
-        :return: A set of internal links, each being a string URL.
-        :rtype: set[str]
+        Returns internal links for websiteURL.
+        
+        :param websiteURL: e.g. "https://example.com"
+        :return: set of URLs
         """
         return asyncio.run(Crawler._async_get_links(websiteURL))
 
     @staticmethod
     async def _async_get_links(websiteURL: str) -> set[str]:
         """
-        Internal async method to get all internal links from the given website URL.
-
-        :param websiteURL: The initial website URL to crawl, e.g. "https://example.com".
-        :type websiteURL: str
-        :return: A set of internal links, each being a string URL.
-        :rtype: set[str]
-
-        You typically won't call this method directly; use `get_links(...)` instead.
+        Internal async link retrieval.
         """
         async with AsyncWebCrawler(verbose=True) as crawler:
             result = await crawler.arun(
@@ -103,29 +66,15 @@ class Crawler:
                 exclude_external_links=True,
                 remove_overlay_elements=True
             )
-        # Build a set of unique internal links (removing trailing slashes).
         return {item['href'].rstrip("/") for item in result.links["internal"]}
 
     @staticmethod
     def crawl_links(websiteURL: str) -> CrawledResult:
         """
-        Synchronously crawl all internal links for the given URL
-        and retrieve their Markdown content, returning a `CrawledResult`.
-
-        This method runs `_async_crawl_links(...)` under the hood using `asyncio.run()`.
-
-        :param websiteURL: The initial website URL to crawl, e.g. "https://example.com".
-        :type websiteURL: str
-        :return: A CrawledResult object containing a dict of { short_link: markdown_content }.
-        :rtype: CrawledResult
-
-        Example usage::
-
-            # Returns a CrawledResult object
-            result = Crawler.crawl_links("https://example.com")
-            
-            # You can optionally filter out "useless" content next
-            result.check_with_ai(api_key="YOUR_OPENAI_API_KEY")
+        Gathers internal links, fetches Markdown, returns CrawledResult.
+        
+        :param websiteURL: e.g. "https://example.com"
+        :return: CrawledResult
         """
         data_dict = asyncio.run(Crawler._async_crawl_links(websiteURL))
         return CrawledResult(data_dict)
@@ -133,22 +82,10 @@ class Crawler:
     @staticmethod
     async def _async_crawl_links(websiteURL: str) -> dict:
         """
-        Internal async crawling workflow:
-          1) Gather all internal links from `websiteURL`.
-          2) For each link, fetch the markdown content.
-          3) Return a dict of short_link -> markdown content.
-
-        :param websiteURL: The initial website URL to crawl, e.g. "https://example.com".
-        :type websiteURL: str
-        :return: A dictionary where each key is a "short_link" version of the URL,
-                 and each value is the crawled Markdown content.
-        :rtype: dict
+        Internal async workflow to fetch Markdown for each link.
         """
-        # Step 1) Gather internal links
         link_set = await Crawler._async_get_links(websiteURL)
-
-        # Step 2) For each link, fetch and store the markdown content
-        clean_data_dict = {}
+        data_dict = {}
         async with AsyncWebCrawler() as crawler:
             for link in link_set:
                 result = await crawler.arun(
@@ -160,7 +97,6 @@ class Crawler:
                     magic=True,
                     exclude_external_images=True
                 )
-                # Generate a short, file-friendly link key
                 short_link = (
                     link
                     .replace("https://www.", "")
@@ -168,40 +104,24 @@ class Crawler:
                     .replace("https:", "")
                     .replace("/", "_")
                 )
-
-                clean_data_dict[short_link] = result.markdown
-
-        return clean_data_dict
+                short_link = short_link[:50]
+                data_dict[short_link] = result.markdown
+        return data_dict
 
     @staticmethod
-    def check_with_ai(clean_data_dict: dict, model : str, api_key: str) -> dict:
+    def check_with_ai(clean_data_dict: dict, model: str, api_key: str) -> dict:
         """
-        Passes each dict entry's content to OpenAI for classification
-        and removes entries classified as 'useless' based on the system instructions.
+        Calls OpenAI to classify each entry, removing 'useless' content.
         
-        :param clean_data_dict: A dictionary of { short_link: markdown_content }.
-        :type clean_data_dict: dict
-        :param model: Your OpenAI model that you want to use to analyze and generate a response. (gpt-3.5, etc)
-        :type model: str
-        :param api_key: Your OpenAI API key to authenticate requests.
-        :type api_key: str
-        :return: The filtered dictionary with "useless" entries removed.
-        :rtype: dict
-
-        The classification logic:
-          - If the system determines the majority of the text is
-            error pages, placeholders, or empty, it is labeled "useless".
-          - Otherwise, it's labeled "useful".
+        :param clean_data_dict: { short_link: markdown_content }
+        :param model: e.g. "gpt-3.5"
+        :param api_key: OpenAI API key
+        :return: Filtered dict
         """
-        # We'll collect keys that are "useless" and pop them from the dict later
         keys_to_remove = []
-        
-        # Instantiate OpenAI client
         client = OpenAI(api_key=api_key)
 
-        # Iterate over each piece of content
         for key, value in clean_data_dict.items():
-            # Define the system prompt that explains how to classify text
             system_message = """
                 System Prompt
                 You are an assistant that classifies text as either "useless" or "useful" for a knowledge base.
@@ -227,13 +147,10 @@ class Crawler:
                 Your output must be a single word: "useless" or "useful".
             """
 
-            # The user prompt for classification
             user_message = (
                 "Decide whether the following text is 'useless' or 'useful' based on the above instructions:\n\n"
                 + value
             )
-            
-            # Make the request to OpenAI
             response = client.chat.completions.create(
                 model=model,
                 messages=[
@@ -243,15 +160,9 @@ class Crawler:
                 max_tokens=20,
                 temperature=0.0,
             )
-
-            # Process the AI response (make it lowercase for easy checks)
-            answer = response.choices[0].message.content.lower()
-
-            if "useless" in answer:
-                # Mark for removal
+            if "useless" in response.choices[0].message.content.lower():
                 keys_to_remove.append(key)
 
-        # Remove all keys determined to be useless
         for useless_key in keys_to_remove:
             clean_data_dict.pop(useless_key, None)
 
