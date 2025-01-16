@@ -30,12 +30,14 @@ class CrawledResult:
         """
         self.data_dict = data_dict
 
-    def check_with_ai(self, api_key: str) -> "CrawledResult":
+    def check_with_ai(self, model : str, api_key: str) -> "CrawledResult":
         """
         Calls the AI-based check on the `data_dict` to remove “useless” entries.
         This method mutates the internal `data_dict` and returns `self`, 
         enabling a fluent (chainable) usage pattern.
 
+        :param model: Your OpenAI model that you want to use to analyze and generate a response. (gpt-3.5, etc)
+        :type model: str
         :param api_key: Your OpenAI API key to authenticate requests.
         :type api_key: str
         :return: Returns the same CrawledResult instance, so you can chain calls.
@@ -47,7 +49,7 @@ class CrawledResult:
             # Now `result.data_dict` is filtered to remove "useless" entries.
         """
         # Delegate the actual logic to Crawler.check_with_ai(...)
-        self.data_dict = Crawler.check_with_ai(self.data_dict, api_key)
+        self.data_dict = Crawler.check_with_ai(self.data_dict, model, api_key)
         return self
 
 
@@ -172,13 +174,15 @@ class Crawler:
         return clean_data_dict
 
     @staticmethod
-    def check_with_ai(clean_data_dict: dict, api_key: str) -> dict:
+    def check_with_ai(clean_data_dict: dict, model : str, api_key: str) -> dict:
         """
         Passes each dict entry's content to OpenAI for classification
         and removes entries classified as 'useless' based on the system instructions.
         
         :param clean_data_dict: A dictionary of { short_link: markdown_content }.
         :type clean_data_dict: dict
+        :param model: Your OpenAI model that you want to use to analyze and generate a response. (gpt-3.5, etc)
+        :type model: str
         :param api_key: Your OpenAI API key to authenticate requests.
         :type api_key: str
         :return: The filtered dictionary with "useless" entries removed.
@@ -231,7 +235,7 @@ class Crawler:
             
             # Make the request to OpenAI
             response = client.chat.completions.create(
-                model="gpt-4o",  # or whichever model you want
+                model=model,
                 messages=[
                     {"role": "system", "content": system_message},
                     {"role": "user", "content": user_message}
